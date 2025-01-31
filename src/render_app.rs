@@ -14,8 +14,12 @@ use crate::pipeline_util::create_pipeline;
 use crate::render_pass_util::create_render_pass;
 use crate::swapchain_util::{create_swapchain, create_swapchain_image_views};
 use crate::sync_util::create_sync_objects;
+use crate::uniform_buffer::{create_descriptor_set_layout, create_uniform_buffers};
 use crate::vertexbuffer_util::{create_index_buffer, create_vertex_buffer};
-
+use std::time::Instant;
+use cgmath::{point3, vec3, Deg};
+use crate::transforms::{Mat4, UniformBufferObject};
+use std::ptr::copy_nonoverlapping as memcpy;
 /// Our Vulkan app.
 #[derive(Clone, Debug)]
 pub struct App {
@@ -25,6 +29,7 @@ pub struct App {
     pub(crate) device: Device,
     frame: usize,
     pub(crate) resized: bool,
+    start: Instant,
 }
 
 
@@ -39,9 +44,11 @@ impl App {
         data.surface = vk_window::create_surface(&instance, &window, &window)?;
         pick_physical_device(&instance, &mut data)?;
         let device = create_logical_device(&entry, &instance, &mut data)?;
+        let start = Instant::now();
         create_swapchain(window, &instance, &device, &mut data)?;
         create_swapchain_image_views(&device, &mut data)?;
         create_render_pass(&instance, &device, &mut data)?;
+        create_descriptor_set_layout(&device, &mut data)?;
         create_pipeline(&device, &mut data)?;
         create_framebuffers(&device, &mut data)?;
         create_command_pool(&instance, &device, &mut data)?;
@@ -50,7 +57,8 @@ impl App {
         create_index_buffer(&instance, &device, &mut data)?;
         create_command_buffers(&device, &mut data)?;
         create_sync_objects(&device, &mut data)?;
-        Ok(Self { entry, instance, data, device, frame: 0, resized})
+
+        Ok(Self { entry, instance, data, device, frame: 0, resized, start})
     }
 
     unsafe fn recreate_swapchain(&mut self, window: &Window) -> anyhow::Result<()> {
@@ -65,6 +73,45 @@ impl App {
         self.data
             .images_in_flight
             .resize(self.data.swapchain_images.len(), vk::Fence::null());
+        create_framebuffers(&self.device, &mut self.data)?;
+        create_uniform_buffers(&self.instance, &self.device, &mut self.data)?;
+        create_command_buffers(&self.device, &mut self.data)?;
+        Ok(())
+    }
+
+    pub unsafe fn update_uniform_buffer(&self, image_index: usize) -> anyhow::Result<()> {
+        let time = self.start.elapsed().as_secs_f32();
+        let model = Mat4::from_axis_angle(
+            vec3(0.0, 0.0, 1.0),
+            Deg(90.0) * time
+        );
+        let view = Mat4::look_at_rh(
+            point3(2.0, 2.0, 2.0),
+            point3(0.0, 0.0, 0.0),
+            vec3(0.0, 0.0, 1.0),
+        );
+        let mut proj = cgmath::perspective(
+            Deg(45.0),
+            self.data.swapchain_extent.width as f32 / self.data.swapchain_extent.height as f32,
+            0.1,
+            10.0,
+        );
+        proj[1][1] *= -1.0; // y is inverted otherwise
+        let ubo = UniformBufferObject { model, view, proj };
+        let memory = self.device.map_memory(
+            self.data.uniform_buffers_memory[image_index],
+            0,
+            size_of::<UniformBufferObject>() as u64,
+            vk::MemoryMapFlags::empty(),
+        )?;
+
+        memcpy(&ubo, memory.cast(), 1);
+
+        self.device.unmap_memory(self.data.uniform_buffers_memory[image_index]);
+
+
+
+
         Ok(())
     }
 
@@ -99,7 +146,8 @@ impl App {
 
         self.data.images_in_flight[image_index] = self.data.in_flight_fences[self.frame];
 
-
+        self.update_uniform_buffer(image_index)?;
+        
         let wait_semaphores = &[self.data.image_available_semaphores[self.frame]];
         let wait_stages = &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
         let command_buffers = &[self.data.command_buffers[image_index]];
@@ -150,6 +198,7 @@ impl App {
 
         self.device.device_wait_idle().unwrap();
         self.destroy_swapchain();
+        self.device.destroy_descriptor_set_layout(self.data.descriptor_set_layout, None);
 
         self.data.in_flight_fences.iter().for_each(|f| self.device.destroy_fence(*f, None));
         self.data.render_finished_semaphores.iter().for_each(|s| self.device.destroy_semaphore(*s, None));
@@ -172,6 +221,12 @@ impl App {
     }
 
     unsafe fn destroy_swapchain(&mut self) {
+        self.data.uniform_buffers
+            .iter()
+            .for_each(|b| self.device.destroy_buffer(*b, None));
+        self.data.uniform_buffers_memory
+            .iter()
+            .for_each(|m| self.device.free_memory(*m, None));
         self.data.framebuffers
             .iter()
             .for_each(|f| self.device.destroy_framebuffer(*f, None));
@@ -202,6 +257,7 @@ pub struct AppData {
     pub swapchain_image_views: Vec<vk::ImageView>,
 
     pub render_pass: vk::RenderPass,
+    pub descriptor_set_layout: vk::DescriptorSetLayout,
     pub pipeline_layout: vk::PipelineLayout,
     pub pipeline: vk::Pipeline,
 
@@ -222,4 +278,6 @@ pub struct AppData {
     pub vertex_buffer_memory: vk::DeviceMemory,
     pub index_buffer: vk::Buffer,
     pub index_buffer_memory: vk::DeviceMemory,
+    pub uniform_buffers: Vec<vk::Buffer>,
+    pub uniform_buffers_memory: Vec<vk::DeviceMemory>,
 }

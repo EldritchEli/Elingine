@@ -19,6 +19,8 @@ mod framebuffer_util;
 mod shader_module_util;
 mod vertexbuffer_util;
 mod buffer_util;
+mod uniform_buffer;
+mod transforms;
 
 use anyhow::{Result};
 use winit::dpi::LogicalSize;
