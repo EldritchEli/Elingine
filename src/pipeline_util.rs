@@ -15,6 +15,7 @@ pub unsafe fn create_pipeline(device: &Device, data: &mut AppData) -> anyhow::Re
         .stage(vk::ShaderStageFlags::VERTEX)
         .module(vert_shader_module)
         .name(b"main\0");
+
     //specialization_info for shader constants!!
     let frag_stage = vk::PipelineShaderStageCreateInfo::builder()
         .stage(vk::ShaderStageFlags::FRAGMENT)
@@ -43,15 +44,6 @@ pub unsafe fn create_pipeline(device: &Device, data: &mut AppData) -> anyhow::Re
         .offset(vk::Offset2D { x: 0, y: 0 })
         .extent(data.swapchain_extent);
 
-    let rasterization_state = vk::PipelineRasterizationStateCreateInfo::builder()
-        .depth_clamp_enable(false)
-        .rasterizer_discard_enable(false)
-        .polygon_mode(vk::PolygonMode::FILL)
-        .line_width(1.0)
-        .cull_mode(vk::CullModeFlags::BACK)
-        .front_face(vk::FrontFace::CLOCKWISE)
-        .depth_bias_enable(false);
-
 
     let viewports = &[viewport];
     let scissors = &[scissor];
@@ -59,13 +51,23 @@ pub unsafe fn create_pipeline(device: &Device, data: &mut AppData) -> anyhow::Re
         .viewports(viewports)
         .scissors(scissors);
 
+    let rasterization_state = vk::PipelineRasterizationStateCreateInfo::builder()
+        .depth_clamp_enable(false)
+        .rasterizer_discard_enable(false)
+        .polygon_mode(vk::PolygonMode::FILL)
+        .line_width(1.0)
+        .cull_mode(vk::CullModeFlags::BACK)
+        .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
+        .depth_bias_enable(false);
+
+
     let multisample_state = vk::PipelineMultisampleStateCreateInfo::builder()
         .sample_shading_enable(false)
         .rasterization_samples(vk::SampleCountFlags::_1);
 
     let attachment = vk::PipelineColorBlendAttachmentState::builder()
         .color_write_mask(vk::ColorComponentFlags::all())
-        .blend_enable(true)
+        .blend_enable(false)
         .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
         .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
         .color_blend_op(vk::BlendOp::ADD)
@@ -88,13 +90,13 @@ pub unsafe fn create_pipeline(device: &Device, data: &mut AppData) -> anyhow::Re
     let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
         .dynamic_states(dynamic_states);
 
-    let layout_info = vk::PipelineLayoutCreateInfo::builder();
-
-    data.pipeline_layout = device.create_pipeline_layout(&layout_info, None)?;
 
     let set_layouts = &[data.descriptor_set_layout];
     let layout_info = vk::PipelineLayoutCreateInfo::builder()
         .set_layouts(set_layouts);
+    data.pipeline_layout = device.create_pipeline_layout(&layout_info, None)?;
+
+
 
     let stages = &[vert_stage, frag_stage];
     let info = vk::GraphicsPipelineCreateInfo::builder()

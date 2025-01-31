@@ -42,6 +42,11 @@ unsafe fn check_physical_device(
         return Err(anyhow!(SuitabilityError("Insufficient swapchain support.")));
     }
 
+    let features = instance.get_physical_device_features(physical_device);
+    if features.sampler_anisotropy != vk::TRUE {
+        return Err(anyhow!(SuitabilityError("No sampler anisotropy.")));
+    }
+
     Ok(())
 }
 
@@ -100,7 +105,8 @@ pub unsafe fn create_logical_device(
         extensions.push(vk::KHR_PORTABILITY_SUBSET_EXTENSION.name.as_ptr());
     }
 
-    let features = vk::PhysicalDeviceFeatures::builder();
+    let features = vk::PhysicalDeviceFeatures::builder()
+        .sampler_anisotropy(true);
 
 
     let info = vk::DeviceCreateInfo::builder()

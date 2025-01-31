@@ -14,12 +14,14 @@ use crate::pipeline_util::create_pipeline;
 use crate::render_pass_util::create_render_pass;
 use crate::swapchain_util::{create_swapchain, create_swapchain_image_views};
 use crate::sync_util::create_sync_objects;
-use crate::uniform_buffer::{create_descriptor_set_layout, create_uniform_buffers};
+use crate::descriptor_util::{create_descriptor_pool, create_descriptor_set_layout, create_descriptor_sets, create_uniform_buffers};
 use crate::vertexbuffer_util::{create_index_buffer, create_vertex_buffer};
 use std::time::Instant;
 use cgmath::{point3, vec3, Deg};
 use crate::transforms::{Mat4, UniformBufferObject};
 use std::ptr::copy_nonoverlapping as memcpy;
+use crate::image_util::{create_texture_image, create_texture_image_view, create_texture_sampler};
+
 /// Our Vulkan app.
 #[derive(Clone, Debug)]
 pub struct App {
@@ -45,16 +47,26 @@ impl App {
         pick_physical_device(&instance, &mut data)?;
         let device = create_logical_device(&entry, &instance, &mut data)?;
         let start = Instant::now();
+
+
         create_swapchain(window, &instance, &device, &mut data)?;
         create_swapchain_image_views(&device, &mut data)?;
         create_render_pass(&instance, &device, &mut data)?;
         create_descriptor_set_layout(&device, &mut data)?;
+
         create_pipeline(&device, &mut data)?;
         create_framebuffers(&device, &mut data)?;
         create_command_pool(&instance, &device, &mut data)?;
+        create_texture_image(&instance, &device, &mut data, "src/resources/birk.png".parse()?)?;
+        create_texture_image_view(&device, &mut data)?;
+        create_texture_sampler(&device, &mut data)?;
         create_transient_command_pool(&instance, &device, &mut data)?;
         create_vertex_buffer(&instance, &device, &mut data)?;
         create_index_buffer(&instance, &device, &mut data)?;
+        create_uniform_buffers(&instance, &device, &mut data)?;
+        create_descriptor_pool(&device, &mut data)?;
+        create_descriptor_sets(&device, &mut data)?;
+
         create_command_buffers(&device, &mut data)?;
         create_sync_objects(&device, &mut data)?;
 
@@ -62,6 +74,7 @@ impl App {
     }
 
     unsafe fn recreate_swapchain(&mut self, window: &Window) -> anyhow::Result<()> {
+
         self.device.device_wait_idle()?;
         self.destroy_swapchain();
         create_swapchain(window, &self.instance, &self.device, &mut self.data)?;
@@ -69,13 +82,13 @@ impl App {
         create_render_pass(&self.instance, &self.device, &mut self.data)?;
         create_pipeline(&self.device, &mut self.data)?;
         create_framebuffers(&self.device, &mut self.data)?;
+        create_uniform_buffers(&self.instance, &self.device, &mut self.data)?;
+        create_descriptor_pool(&self.device, &mut self.data)?;
+        create_descriptor_sets(&self.device, &mut self.data)?;
         create_command_buffers(&self.device, &mut self.data)?;
         self.data
             .images_in_flight
             .resize(self.data.swapchain_images.len(), vk::Fence::null());
-        create_framebuffers(&self.device, &mut self.data)?;
-        create_uniform_buffers(&self.instance, &self.device, &mut self.data)?;
-        create_command_buffers(&self.device, &mut self.data)?;
         Ok(())
     }
 
@@ -147,7 +160,7 @@ impl App {
         self.data.images_in_flight[image_index] = self.data.in_flight_fences[self.frame];
 
         self.update_uniform_buffer(image_index)?;
-        
+
         let wait_semaphores = &[self.data.image_available_semaphores[self.frame]];
         let wait_stages = &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
         let command_buffers = &[self.data.command_buffers[image_index]];
@@ -198,6 +211,12 @@ impl App {
 
         self.device.device_wait_idle().unwrap();
         self.destroy_swapchain();
+        self.device.destroy_sampler(self.data.texture_sampler, None);
+        self.device.destroy_image_view(self.data.texture_image_view, None);
+
+        self.device.destroy_image(self.data.texture_image, None);
+        self.device.free_memory(self.data.texture_image_memory, None);
+
         self.device.destroy_descriptor_set_layout(self.data.descriptor_set_layout, None);
 
         self.data.in_flight_fences.iter().for_each(|f| self.device.destroy_fence(*f, None));
@@ -221,6 +240,7 @@ impl App {
     }
 
     unsafe fn destroy_swapchain(&mut self) {
+        self.device.destroy_descriptor_pool(self.data.descriptor_pool, None);
         self.data.uniform_buffers
             .iter()
             .for_each(|b| self.device.destroy_buffer(*b, None));
@@ -280,4 +300,11 @@ pub struct AppData {
     pub index_buffer_memory: vk::DeviceMemory,
     pub uniform_buffers: Vec<vk::Buffer>,
     pub uniform_buffers_memory: Vec<vk::DeviceMemory>,
+    pub descriptor_pool: vk::DescriptorPool,
+    pub descriptor_sets: Vec<vk::DescriptorSet>,
+
+    pub texture_image: vk::Image,
+    pub texture_image_memory: vk::DeviceMemory,
+    pub  texture_image_view: vk::ImageView,
+    pub texture_sampler: vk::Sampler
 }
