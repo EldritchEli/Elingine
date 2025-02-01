@@ -63,7 +63,6 @@ pub unsafe fn copy_buffer(
 
     let regions = vk::BufferCopy::builder().size(size);
     device.cmd_copy_buffer(command_buffer, source, destination, &[regions]);
-
     end_single_time_commands(device, data, command_buffer)?;
 
     Ok(())

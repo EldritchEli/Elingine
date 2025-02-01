@@ -65,6 +65,18 @@ pub unsafe fn create_pipeline(device: &Device, data: &mut AppData) -> anyhow::Re
         .sample_shading_enable(false)
         .rasterization_samples(vk::SampleCountFlags::_1);
 
+    let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
+        .depth_test_enable(true)
+        .depth_write_enable(true)
+        .depth_compare_op(vk::CompareOp::LESS)
+        .depth_bounds_test_enable(false)
+        .min_depth_bounds(0.0) // Optional.
+        .max_depth_bounds(1.0) // Optional.
+        .stencil_test_enable(false);
+        //.front(/* vk::StencilOpState */) // Optional.
+      //  .back(/* vk::StencilOpState */); // Optional.
+
+
     let attachment = vk::PipelineColorBlendAttachmentState::builder()
         .color_write_mask(vk::ColorComponentFlags::all())
         .blend_enable(false)
@@ -106,10 +118,12 @@ pub unsafe fn create_pipeline(device: &Device, data: &mut AppData) -> anyhow::Re
         .viewport_state(&viewport_state)
         .rasterization_state(&rasterization_state)
         .multisample_state(&multisample_state)
+        .depth_stencil_state(&depth_stencil_state)
         .color_blend_state(&color_blend_state)
         .layout(data.pipeline_layout)
         .render_pass(data.render_pass)
         .subpass(0);
+
 
     data.pipeline = device.create_graphics_pipelines(
         vk::PipelineCache::null(), &[info], None)?.0[0];

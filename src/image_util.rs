@@ -96,7 +96,7 @@ pub unsafe fn create_texture_image(
 }
 
 
-unsafe fn create_image(
+pub unsafe fn create_image(
     instance: &Instance,
     device: &Device,
     data: &AppData,
@@ -143,7 +143,7 @@ unsafe fn create_image(
     Ok((image, image_memory))
 }
 
-unsafe fn transition_image_layout(
+pub unsafe fn transition_image_layout(
     device: &Device,
     data: &AppData,
     image: vk::Image,
@@ -160,9 +160,9 @@ unsafe fn transition_image_layout(
     ) = match (old_layout, new_layout) {
         (vk::ImageLayout::UNDEFINED, vk::ImageLayout::TRANSFER_DST_OPTIMAL) => (
             vk::AccessFlags::empty(),
-            vk::AccessFlags::TRANSFER_WRITE,
+            vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
             vk::PipelineStageFlags::TOP_OF_PIPE,
-            vk::PipelineStageFlags::TRANSFER,
+            vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
         ),
         (vk::ImageLayout::TRANSFER_DST_OPTIMAL, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL) => (
             vk::AccessFlags::TRANSFER_WRITE,
@@ -175,8 +175,15 @@ unsafe fn transition_image_layout(
 
     let command_buffer = begin_single_time_commands(device, data)?;
 
+    let aspect_mask = if new_layout == vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL {
+        match format { vk::Format::D32_SFLOAT_S8_UINT | vk::Format::D24_UNORM_S8_UINT =>
+                vk::ImageAspectFlags::DEPTH | vk::ImageAspectFlags::STENCIL,
+            _ => vk::ImageAspectFlags::DEPTH }
+    }
+    else { vk::ImageAspectFlags::COLOR };
+
     let subresource = vk::ImageSubresourceRange::builder()
-        .aspect_mask(vk::ImageAspectFlags::COLOR)
+        .aspect_mask(aspect_mask)
         .base_mip_level(0)
         .level_count(1)
         .base_array_layer(0)
@@ -249,6 +256,7 @@ pub unsafe fn create_texture_image_view(device: &Device, data: &mut AppData) -> 
         device,
         data.texture_image,
         vk::Format::R8G8B8A8_SRGB,
+        vk::ImageAspectFlags::COLOR
     )?;
 
     Ok(())
@@ -259,9 +267,10 @@ pub unsafe fn create_image_view(
     device: &Device,
     image: vk::Image,
     format: vk::Format,
+    aspects: vk::ImageAspectFlags,
 ) -> Result<vk::ImageView> {
     let subresource_range = vk::ImageSubresourceRange::builder()
-        .aspect_mask(vk::ImageAspectFlags::COLOR)
+        .aspect_mask(aspects)
         .base_mip_level(0)
         .level_count(1)
         .base_array_layer(0)

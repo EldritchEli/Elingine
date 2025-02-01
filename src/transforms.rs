@@ -1,3 +1,4 @@
+use cgmath::{BaseFloat, Deg, Matrix4, Rad};
 use vulkanalia::vk;
 use vulkanalia::vk::HasBuilder;
 
@@ -13,4 +14,20 @@ pub struct UniformBufferObject {
 }
 
 
+pub fn vulkanperspective(fovy: f32, aspect: f32, near: f32, far: f32) -> Matrix4<f32> {
+    let correction = Mat4::new(
+        1.0,  0.0,       0.0, 0.0,
+        // We're also flipping the Y-axis with this line's `-1.0`.
+        0.0, -1.0,       0.0, 0.0,
+        0.0,  0.0, 1.0 / 2.0, 0.0,
+        0.0,  0.0, 1.0 / 2.0, 1.0,
+    );
 
+    correction
+        * cgmath::perspective(
+        Deg(fovy),
+        aspect,
+        near,
+        far,
+    )
+}

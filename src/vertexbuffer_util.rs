@@ -12,27 +12,31 @@ type Vec3 = cgmath::Vector3<f32>;
 
 
 
-
-static VERTICES: [Vertex; 4] = [
-    Vertex::new(vec2(-0.5, -0.5), vec3(1.0, 0.0, 0.0), vec2(1.0, 0.0)),
-    Vertex::new(vec2(0.5, -0.5), vec3(0.0, 1.0, 0.0), vec2(0.0, 0.0)),
-    Vertex::new(vec2(0.5, 0.5), vec3(0.0, 0.0, 1.0), vec2(0.0, 1.0)),
-    Vertex::new(vec2(-0.5, 0.5), vec3(1.0, 1.0, 1.0), vec2(1.0, 1.0)),
+pub static VERTICES: [Vertex; 8] = [
+    Vertex::new(vec3(-0.5, -0.5, 0.0), vec3(1.0, 0.0, 0.0), vec2(1.0, 0.0)),
+    Vertex::new(vec3(0.5, -0.5, 0.0), vec3(0.0, 1.0, 0.0), vec2(0.0, 0.0)),
+    Vertex::new(vec3(0.5, 0.5, 0.0), vec3(0.0, 0.0, 1.0), vec2(0.0, 1.0)),
+    Vertex::new(vec3(-0.5, 0.5, 0.0), vec3(1.0, 1.0, 1.0), vec2(1.0, 1.0)),
+    Vertex::new(vec3(-0.5, -0.5, -0.5), vec3(1.0, 0.0, 0.0), vec2(1.0, 0.0)),
+    Vertex::new(vec3(0.5, -0.5, -0.5), vec3(0.0, 1.0, 0.0), vec2(0.0, 0.0)),
+    Vertex::new(vec3(0.5, 0.5, -0.5), vec3(0.0, 0.0, 1.0), vec2(0.0, 1.0)),
+    Vertex::new(vec3(-0.5, 0.5, -0.5), vec3(1.0, 1.0, 1.0), vec2(1.0, 1.0)),
 ];
 
-pub const INDICES: &[u16] = &[0, 1, 2, 2, 3, 0];
-
-
+pub const INDICES: &[u16] = &[
+    0, 1, 2, 2, 3, 0,
+    4, 5, 6, 6, 7, 4,
+];
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct Vertex {
-    pub pos: crate::transforms::Vec2,
+    pub pos: crate::transforms::Vec3,
     pub color: crate::transforms::Vec3,
     pub tex_coord: crate::transforms::Vec2,
 }
 
 impl Vertex {
-    pub const fn new(pos: crate::transforms::Vec2, color: crate::transforms::Vec3, tex_coord: crate::transforms::Vec2) -> Self {
+    pub const fn new(pos: crate::transforms::Vec3, color: crate::transforms::Vec3, tex_coord: crate::transforms::Vec2) -> Self {
         Self { pos, color, tex_coord }
     }
 
@@ -45,25 +49,25 @@ impl Vertex {
     }
 
     pub fn attribute_descriptions() -> [vk::VertexInputAttributeDescription; 3] {
-        let pos = vk::VertexInputAttributeDescription::builder()
-            .binding(0)
-            .location(0)
-            .format(vk::Format::R32G32_SFLOAT)
-            .offset(0)
-            .build();
-        let color = vk::VertexInputAttributeDescription::builder()
-            .binding(0)
-            .location(1)
-            .format(vk::Format::R32G32B32_SFLOAT)
-            .offset(size_of::<crate::transforms::Vec2>() as u32)
-            .build();
-        let tex_coord = vk::VertexInputAttributeDescription::builder()
-            .binding(0)
-            .location(2)
-            .format(vk::Format::R32G32_SFLOAT)
-            .offset((size_of::<crate::transforms::Vec2>() + size_of::<crate::transforms::Vec3>()) as u32)
-            .build();
-        [pos, color, tex_coord]
+    let pos = vk::VertexInputAttributeDescription::builder()
+    .binding(0)
+    .location(0)
+    .format(vk::Format::R32G32B32_SFLOAT)
+    .offset(0)
+    .build();
+    let color = vk::VertexInputAttributeDescription::builder()
+    .binding(0)
+    .location(1)
+    .format(vk::Format::R32G32B32_SFLOAT)
+    .offset(size_of::<Vec3>() as u32)
+    .build();
+    let tex_coord = vk::VertexInputAttributeDescription::builder()
+    .binding(0)
+    .location(2)
+    .format(vk::Format::R32G32_SFLOAT)
+    .offset((size_of::<Vec3>() + size_of::<Vec3>()) as u32)
+    .build();
+    [pos, color, tex_coord]
     }
 }
 

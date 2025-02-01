@@ -8,7 +8,7 @@ use crate::{MAX_FRAMES_IN_FLIGHT, VALIDATION_ENABLED};
 use crate::command_buffer_util::create_command_buffers;
 use crate::command_pool::{create_command_pool, create_transient_command_pool};
 use crate::device_util::{create_logical_device, pick_physical_device};
-use crate::framebuffer_util::create_framebuffers;
+use crate::framebuffer_util::{create_depth_objects, create_framebuffers};
 use crate::instance_util::create_instance;
 use crate::pipeline_util::create_pipeline;
 use crate::render_pass_util::create_render_pass;
@@ -55,8 +55,9 @@ impl App {
         create_descriptor_set_layout(&device, &mut data)?;
 
         create_pipeline(&device, &mut data)?;
-        create_framebuffers(&device, &mut data)?;
         create_command_pool(&instance, &device, &mut data)?;
+        create_depth_objects(&instance, &device, &mut data)?;
+        create_framebuffers(&device, &mut data)?;
         create_texture_image(&instance, &device, &mut data, "src/resources/birk.png".parse()?)?;
         create_texture_image_view(&device, &mut data)?;
         create_texture_sampler(&device, &mut data)?;
@@ -74,21 +75,18 @@ impl App {
     }
 
     unsafe fn recreate_swapchain(&mut self, window: &Window) -> anyhow::Result<()> {
-
         self.device.device_wait_idle()?;
         self.destroy_swapchain();
         create_swapchain(window, &self.instance, &self.device, &mut self.data)?;
         create_swapchain_image_views(&self.device, &mut self.data)?;
         create_render_pass(&self.instance, &self.device, &mut self.data)?;
         create_pipeline(&self.device, &mut self.data)?;
+        create_depth_objects(&self.instance, &self.device, &mut self.data)?;
         create_framebuffers(&self.device, &mut self.data)?;
         create_uniform_buffers(&self.instance, &self.device, &mut self.data)?;
         create_descriptor_pool(&self.device, &mut self.data)?;
         create_descriptor_sets(&self.device, &mut self.data)?;
         create_command_buffers(&self.device, &mut self.data)?;
-        self.data
-            .images_in_flight
-            .resize(self.data.swapchain_images.len(), vk::Fence::null());
         Ok(())
     }
 
@@ -103,13 +101,22 @@ impl App {
             point3(0.0, 0.0, 0.0),
             vec3(0.0, 0.0, 1.0),
         );
-        let mut proj = cgmath::perspective(
+        let correction = Mat4::new(
+            1.0,  0.0,       0.0, 0.0,
+            // We're also flipping the Y-axis with this line's `-1.0`.
+            0.0, -1.0,       0.0, 0.0,
+            0.0,  0.0, 1.0 / 2.0, 0.0,
+            0.0,  0.0, 1.0 / 2.0, 1.0,
+        );
+
+        let proj = correction
+            * cgmath::perspective(
             Deg(45.0),
             self.data.swapchain_extent.width as f32 / self.data.swapchain_extent.height as f32,
             0.1,
             10.0,
         );
-        proj[1][1] *= -1.0; // y is inverted otherwise
+
         let ubo = UniformBufferObject { model, view, proj };
         let memory = self.device.map_memory(
             self.data.uniform_buffers_memory[image_index],
@@ -240,6 +247,9 @@ impl App {
     }
 
     unsafe fn destroy_swapchain(&mut self) {
+        self.device.destroy_image_view(self.data.depth_image_view, None);
+        self.device.free_memory(self.data.depth_image_memory, None);
+        self.device.destroy_image(self.data.depth_image, None);
         self.device.destroy_descriptor_pool(self.data.descriptor_pool, None);
         self.data.uniform_buffers
             .iter()
@@ -306,5 +316,9 @@ pub struct AppData {
     pub texture_image: vk::Image,
     pub texture_image_memory: vk::DeviceMemory,
     pub  texture_image_view: vk::ImageView,
-    pub texture_sampler: vk::Sampler
+    pub texture_sampler: vk::Sampler,
+
+    pub depth_image: vk::Image,
+    pub depth_image_memory: vk::DeviceMemory,
+    pub depth_image_view: vk::ImageView
 }

@@ -1,7 +1,7 @@
 use vulkanalia::{vk, Device};
 use vulkanalia::vk::{DeviceV1_0, HasBuilder};
 use crate::render_app::AppData;
-use crate::vertexbuffer_util::{INDICES};
+use crate::vertexbuffer_util::{INDICES, VERTICES};
 
 pub unsafe fn create_command_buffers(device: &Device, data: &mut AppData) -> anyhow::Result<()> {
     let allocate_info = vk::CommandBufferAllocateInfo::builder()
@@ -27,7 +27,11 @@ pub unsafe fn create_command_buffers(device: &Device, data: &mut AppData) -> any
         let color_clear_value = vk::ClearValue {
             color: vk::ClearColorValue { float32: [0.0, 0.0, 0.0, 1.0], }, };
 
-        let clear_values = &[color_clear_value];
+        let depth_clear_value = vk::ClearValue {
+            depth_stencil: vk::ClearDepthStencilValue { depth: 1.0, stencil: 0, }, };
+
+        let clear_values = &[color_clear_value, depth_clear_value];
+
         let info = vk::RenderPassBeginInfo::builder()
             .render_pass(data.render_pass)
             .framebuffer(data.framebuffers[i])
