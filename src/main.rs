@@ -22,6 +22,7 @@ mod buffer_util;
 mod descriptor_util;
 mod transforms;
 mod image_util;
+mod varlen;
 
 use anyhow::{Result};
 use winit::dpi::LogicalSize;

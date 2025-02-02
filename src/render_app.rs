@@ -15,7 +15,7 @@ use crate::render_pass_util::create_render_pass;
 use crate::swapchain_util::{create_swapchain, create_swapchain_image_views};
 use crate::sync_util::create_sync_objects;
 use crate::descriptor_util::{create_descriptor_pool, create_descriptor_set_layout, create_descriptor_sets, create_uniform_buffers};
-use crate::vertexbuffer_util::{create_index_buffer, create_vertex_buffer};
+use crate::vertexbuffer_util::{create_index_buffer, create_vertex_buffer, load_model, Vertex, VertexData};
 use std::time::Instant;
 use cgmath::{point3, vec3, Deg};
 use crate::transforms::{Mat4, UniformBufferObject};
@@ -48,7 +48,6 @@ impl App {
         let device = create_logical_device(&entry, &instance, &mut data)?;
         let start = Instant::now();
 
-
         create_swapchain(window, &instance, &device, &mut data)?;
         create_swapchain_image_views(&device, &mut data)?;
         create_render_pass(&instance, &device, &mut data)?;
@@ -58,10 +57,11 @@ impl App {
         create_command_pool(&instance, &device, &mut data)?;
         create_depth_objects(&instance, &device, &mut data)?;
         create_framebuffers(&device, &mut data)?;
-        create_texture_image(&instance, &device, &mut data, "src/resources/birk.png".parse()?)?;
+        create_texture_image(&instance, &device, &mut data, "src/resources/viking_room.png".parse()?)?;
         create_texture_image_view(&device, &mut data)?;
         create_texture_sampler(&device, &mut data)?;
         create_transient_command_pool(&instance, &device, &mut data)?;
+        load_model(&mut data)?;
         create_vertex_buffer(&instance, &device, &mut data)?;
         create_index_buffer(&instance, &device, &mut data)?;
         create_uniform_buffers(&instance, &device, &mut data)?;
@@ -304,8 +304,8 @@ pub struct AppData {
     pub in_flight_fences: Vec<vk::Fence>,
     pub images_in_flight: Vec<vk::Fence>,
 
-    pub vertex_buffer: vk::Buffer,
-    pub vertex_buffer_memory: vk::DeviceMemory,
+    //pub vertex_buffer: vk::Buffer,
+    //pub vertex_buffer_memory: vk::DeviceMemory,
     pub index_buffer: vk::Buffer,
     pub index_buffer_memory: vk::DeviceMemory,
     pub uniform_buffers: Vec<vk::Buffer>,
@@ -313,6 +313,7 @@ pub struct AppData {
     pub descriptor_pool: vk::DescriptorPool,
     pub descriptor_sets: Vec<vk::DescriptorSet>,
 
+    pub mip_levels: u32,
     pub texture_image: vk::Image,
     pub texture_image_memory: vk::DeviceMemory,
     pub  texture_image_view: vk::ImageView,
@@ -320,5 +321,10 @@ pub struct AppData {
 
     pub depth_image: vk::Image,
     pub depth_image_memory: vk::DeviceMemory,
-    pub depth_image_view: vk::ImageView
+    pub depth_image_view: vk::ImageView,
+    //pub vertex_data     : VertexData
+    pub vertices: Vec<Vertex>,
+    pub indices: Vec<u32>,
+    pub vertex_buffer: vk::Buffer,
+    pub vertex_buffer_memory: vk::DeviceMemory,
 }

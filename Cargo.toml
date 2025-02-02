@@ -14,3 +14,5 @@ thiserror = "1"
 tobj = { version = "3", features = ["log"] }
 vulkanalia = { version = "=0.26.0", features = ["libloading", "provisional", "window"] }
 winit = "0.29"
+varlen = "0.1.2"
+varlen_macro = "0.1.3"

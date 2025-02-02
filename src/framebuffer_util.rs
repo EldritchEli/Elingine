@@ -36,10 +36,12 @@ pub unsafe fn create_depth_objects(instance: &Instance, device: &Device, data: &
         data,
         data.swapchain_extent.width,
         data.swapchain_extent.height,
+        1,
         format,
         vk::ImageTiling::OPTIMAL,
         vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
         vk::MemoryPropertyFlags::DEVICE_LOCAL,
+
     )?;
 
     data.depth_image = depth_image;
@@ -47,7 +49,7 @@ pub unsafe fn create_depth_objects(instance: &Instance, device: &Device, data: &
 
     // Image View
 
-    data.depth_image_view = create_image_view(device, data.depth_image, format, vk::ImageAspectFlags::DEPTH)?;
+    data.depth_image_view = create_image_view(device, data.depth_image, format, vk::ImageAspectFlags::DEPTH,1)?;
 
     Ok(())
 }

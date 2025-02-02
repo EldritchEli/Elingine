@@ -6,11 +6,103 @@ use vulkanalia::vk::{DeviceV1_0, HasBuilder};
 use crate::render_app::AppData;
 use std::ptr::copy_nonoverlapping as memcpy;
 use crate::buffer_util::{copy_buffer, create_buffer};
+use varlen::*;
+use varlen_macro::define_varlen;
+use std::collections::HashMap;
+use std::fs::File;
+use std::hash::{Hash, Hasher};
+use std::io::BufReader;
 
 type Vec2 = cgmath::Vector2<f32>;
 type Vec3 = cgmath::Vector3<f32>;
 
+#[repr(C)]
+#[derive(Debug)]
+/// texture coordinates and paths to texture file
+pub struct Texture { pub tex_string : String, pub tex_coords : Vec<Vec2> }
+/// color is either encoded as RGB triplets or texture coordinates and paths to texture file
+#[repr(C)]
+#[derive(Debug)]
+pub enum Colors { RGB(Vec<Vec3>), Texture(Texture) }
 
+
+
+ #[derive(Clone, Debug, Default)]
+ pub struct VertexData {
+     pub vertices: Vec<Vertex>,
+     pub indices: Vec<u32>,
+     pub vertex_buffer: vk::Buffer,
+     pub vertex_buffer_memory: vk::DeviceMemory,
+ }
+
+pub fn load_model(data: &mut AppData) -> Result<()> {
+    let mut reader = BufReader::new(File::open("src/resources/viking_room.obj")?);
+
+    let (models,_) = tobj::load_obj_buf(
+        &mut reader,
+        &tobj::LoadOptions { triangulate: true, ..Default::default() },
+        |_| Ok(Default::default()),
+    )?;
+
+    let mut unique_vertices = HashMap::new();
+
+    for model in &models {
+        for index in &model.mesh.indices {
+            let pos_offset = (3 * index) as usize;
+            let tex_coord_offset = (2 * index) as usize;
+            let vertex = Vertex {
+                pos: vec3(
+                    model.mesh.positions[pos_offset],
+                    model.mesh.positions[pos_offset + 1],
+                    model.mesh.positions[pos_offset + 2],
+                ),
+                color: vec3(1.0, 1.0, 1.0),
+                tex_coord: vec2(
+                    model.mesh.texcoords[tex_coord_offset],
+                    1.0 - model.mesh.texcoords[tex_coord_offset + 1],
+                ),
+
+            };
+
+
+            if let Some(index) = unique_vertices.get(&vertex) {
+                data.indices.push(*index as u32);
+            } else {
+                let index = data.vertices.len();
+                unique_vertices.insert(vertex, index);
+                data.vertices.push(vertex);
+                data.indices.push(index as u32);
+            }
+
+
+        }
+    }
+    Ok(())
+}
+
+#[repr(C)]
+#[define_varlen]
+pub struct MeshData {
+    #[controls_layout]
+    pub s: usize,
+    #[varlen_array]
+    pub positions: [Vec3;*s],
+    #[varlen_array]
+    pub normals:  [Vec3;*s],
+    pub indices: Option<Vec<u16>>,
+    pub colors : Colors
+}
+/*
+
+impl MeshData {
+    pub fn new(vertices: Vec<Vec3>, indices: &[u16], colors: &[Colors]) -> Result<MeshData> {
+
+        let v = vec![9];
+    }
+
+    }
+
+*/
 
 pub static VERTICES: [Vertex; 8] = [
     Vertex::new(vec3(-0.5, -0.5, 0.0), vec3(1.0, 0.0, 0.0), vec2(1.0, 0.0)),
@@ -27,17 +119,43 @@ pub const INDICES: &[u16] = &[
     0, 1, 2, 2, 3, 0,
     4, 5, 6, 6, 7, 4,
 ];
+/*
+pub fn test_mesh1() -> MeshData{ MeshData {
+    positions: [vec3(-0.5, -0.5, 0.0),
+        vec3(0.5, -0.5, 0.0),
+        vec3(0.5, 0.5, 0.0),
+        vec3(-0.5, 0.5, 0.0),
+        vec3(-0.5, -0.5, -0.5),
+        vec3(0.5, -0.5, -0.5),
+        vec3(0.5, 0.5, -0.5),
+        vec3(-0.5, 0.5, -0.5)],
+    normals: None,
+    indices: Some(Vec::from([0u16, 1u16, 2u16, 2u16, 3u16, 0u16,
+        4u16, 5u16, 6u16, 6u16, 7u16, 4u16])),
+    vertex_count: 8,
+    colors: Colors::Texture(Texture {
+        tex_string: "src/resources/birk.png".to_string(),
+        tex_coords: Vec::from([vec2(1.0, 0.0), vec2(0.0, 0.0),
+            vec2(0.0, 1.0), vec2(1.0, 1.0),
+            vec2(1.0, 0.0), vec2(0.0, 0.0),
+            vec2(0.0, 1.0), vec2(1.0, 1.0, )]
+        ),
+    })
+}
+}*/
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct Vertex {
-    pub pos: crate::transforms::Vec3,
-    pub color: crate::transforms::Vec3,
-    pub tex_coord: crate::transforms::Vec2,
+    pub pos: Vec3,
+    pub color:Vec3,
+    pub tex_coord: Vec2,
 }
 
 impl Vertex {
-    pub const fn new(pos: crate::transforms::Vec3, color: crate::transforms::Vec3, tex_coord: crate::transforms::Vec2) -> Self {
-        Self { pos, color, tex_coord }
+    pub const fn new(pos: Vec3,
+                     color: Vec3,
+                     tex_coord: Vec2, ) -> Self { Self { pos, color, tex_coord}
     }
 
     pub fn binding_description() -> vk::VertexInputBindingDescription {
@@ -77,7 +195,7 @@ pub(crate) unsafe fn create_vertex_buffer(
     device: &Device,
     data: &mut AppData,
 ) -> Result<()> {
-    let size = (size_of::<Vertex>() * VERTICES.len()) as u64;
+    let size = (size_of::<Vertex>() * data.vertices.len()/*VERTICES.len()*/) as u64;
 
     let (staging_buffer, staging_buffer_memory) = create_buffer(
         instance,
@@ -95,7 +213,7 @@ pub(crate) unsafe fn create_vertex_buffer(
         vk::MemoryMapFlags::empty(),
     )?;
 
-    memcpy(VERTICES.as_ptr(), memory.cast(), VERTICES.len());
+    memcpy(data.vertices.as_ptr()/*VERTICES.as_ptr()*/, memory.cast(), data.vertices.len());
 
     device.unmap_memory(staging_buffer_memory);
 
@@ -123,7 +241,7 @@ pub unsafe fn create_index_buffer(
     device: &Device,
     data: &mut AppData,
 ) -> Result<()> {
-    let size = (size_of::<u16>() * INDICES.len()) as u64;
+    let size = (size_of::<u32>() * data.indices.len()/*INDICES.len()*/) as u64;
 
     let (staging_buffer, staging_buffer_memory) = create_buffer(
         instance,
@@ -141,7 +259,7 @@ pub unsafe fn create_index_buffer(
         vk::MemoryMapFlags::empty(),
     )?;
 
-    memcpy(INDICES.as_ptr(), memory.cast(), INDICES.len());
+    memcpy(data.indices.as_ptr(), memory.cast(), data.indices.len());
 
     device.unmap_memory(staging_buffer_memory);
 
@@ -172,5 +290,27 @@ pub unsafe fn create_index_buffer(
 
 
 
+impl PartialEq for Vertex {
+    fn eq(&self, other: &Self) -> bool {
+        self.pos == other.pos
+            && self.color == other.color
+            && self.tex_coord == other.tex_coord
+    }
+}
+
+impl Eq for Vertex {}
+
+impl Hash for Vertex {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.pos[0].to_bits().hash(state);
+        self.pos[1].to_bits().hash(state);
+        self.pos[2].to_bits().hash(state);
+        self.color[0].to_bits().hash(state);
+        self.color[1].to_bits().hash(state);
+        self.color[2].to_bits().hash(state);
+        self.tex_coord[0].to_bits().hash(state);
+        self.tex_coord[1].to_bits().hash(state);
+    }
+}
 
 
